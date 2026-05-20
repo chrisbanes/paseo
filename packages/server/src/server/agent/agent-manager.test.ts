@@ -5920,6 +5920,22 @@ test.each([
   },
 );
 
+test("listImportablePersistedAgents includes cursor when enabled", async () => {
+  const cursorClient = new RecordingPersistedAgentsClient("cursor");
+  const manager = new AgentManager({
+    clients: { cursor: cursorClient },
+    providerDefinitions: {
+      cursor: { enabled: true, derivedFromProviderId: null },
+    },
+    logger,
+  });
+
+  const result = await manager.listImportablePersistedAgents();
+
+  expect(cursorClient.calls).toBe(1);
+  expect(result.map((descriptor) => descriptor.provider)).toEqual(["cursor"]);
+});
+
 test("listImportablePersistedAgents narrows to the providerFilter when supplied", async () => {
   const claudeClient = new RecordingPersistedAgentsClient("claude");
   const codexClient = new RecordingPersistedAgentsClient("codex");

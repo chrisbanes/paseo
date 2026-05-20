@@ -313,6 +313,56 @@ test("listImportableProviderSessions keeps realpath-equivalent cwd matches", asy
   expect(result.entries.map((entry) => entry.providerHandleId)).toEqual(["pi-handle"]);
 });
 
+test("listImportableProviderSessions projects cursor ACP sessions", async () => {
+  const cwd = "/tmp/paseo";
+  const descriptors = [
+    makeDescriptor({
+      provider: "cursor",
+      sessionId: "a7e6271b-a371-476d-98a6-0b2251617c46",
+      nativeHandle: "a7e6271b-a371-476d-98a6-0b2251617c46",
+      cwd,
+      title: "Import Session Brainstorm",
+      lastActivityAt: "2026-05-20T07:31:52.505Z",
+      firstPrompt: "Let's brainstorm import session support",
+    }),
+  ];
+
+  const result = await listImportableProviderSessions({
+    request: makeRequest({ cwd, providers: ["cursor"], limit: 15 }),
+    agentManager: {
+      listAgents: () => [],
+      listImportablePersistedAgents: async (options) => {
+        expect(options).toEqual({
+          limit: 200,
+          providerFilter: new Set(["cursor"]),
+          cwd,
+        });
+        return descriptors;
+      },
+    } satisfies Pick<AgentManager, "listAgents" | "listImportablePersistedAgents">,
+    agentStorage: {
+      list: async () => [],
+    } satisfies Pick<AgentStorage, "list">,
+    providerRegistry: { cursor: { label: "Cursor" } },
+  });
+
+  expect(result).toEqual({
+    filteredAlreadyImportedCount: 0,
+    entries: [
+      {
+        providerId: "cursor",
+        providerLabel: "Cursor",
+        providerHandleId: "a7e6271b-a371-476d-98a6-0b2251617c46",
+        cwd,
+        title: "Import Session Brainstorm",
+        firstPromptPreview: "Let's brainstorm import session support",
+        lastPromptPreview: "Let's brainstorm import session support",
+        lastActivityAt: "2026-05-20T07:31:52.505Z",
+      },
+    ],
+  });
+});
+
 test("listImportableProviderSessions rejects invalid since values", async () => {
   await expect(
     listImportableProviderSessions({
@@ -431,6 +481,70 @@ test("importProviderSession resumes by provider handle, hydrates the timeline, a
       explicitTitle: null,
     }),
   );
+  expect(result).toEqual({ snapshot, timelineSize: 2 });
+});
+
+test("importProviderSession resumes cursor sessions by ACP handle", async () => {
+  const cwd = "/tmp/paseo";
+  const timeline: AgentTimelineItem[] = [
+    { type: "user_message", text: "Fix the agent command" },
+    { type: "assistant_message", text: "I will inspect the launch path." },
+  ];
+  const snapshot = makeManagedAgent({
+    id: "00000000-0000-4000-8000-000000000634",
+    provider: "cursor",
+    cwd,
+    sessionId: "658a241d-2528-4be5-9bc6-c0c31714c547",
+    nativeHandle: "658a241d-2528-4be5-9bc6-c0c31714c547",
+    title: "Agent Command Fix",
+  });
+  const descriptor = makeDescriptor({
+    provider: "cursor",
+    sessionId: "658a241d-2528-4be5-9bc6-c0c31714c547",
+    nativeHandle: "658a241d-2528-4be5-9bc6-c0c31714c547",
+    cwd,
+    title: "Agent Command Fix",
+    firstPrompt: "Fix the agent command",
+    lastActivityAt: "2026-05-19T13:58:40.129Z",
+  });
+  const agentManager = {
+    findPersistedAgent: vi.fn().mockResolvedValue(descriptor),
+    resumeAgentFromPersistence: vi.fn().mockResolvedValue(snapshot),
+    hydrateTimelineFromProvider: vi.fn().mockResolvedValue(undefined),
+    getTimeline: vi.fn().mockReturnValue(timeline),
+    setTitle: vi.fn().mockResolvedValue(undefined),
+    notifyAgentState: vi.fn(),
+  } as unknown as AgentManager;
+  const agentStorage = {
+    list: vi.fn().mockResolvedValue([]),
+    get: vi.fn().mockResolvedValue(null),
+  } as unknown as AgentStorage;
+
+  const result = await importProviderSession({
+    request: {
+      requestId: "import-cursor-session",
+      provider: "cursor",
+      providerHandleId: "658a241d-2528-4be5-9bc6-c0c31714c547",
+      cwd,
+    },
+    agentManager,
+    agentStorage,
+    logger: { warn: vi.fn(), error: vi.fn() } as never,
+  });
+
+  expect(agentManager.findPersistedAgent).toHaveBeenCalledWith(
+    "cursor",
+    "658a241d-2528-4be5-9bc6-c0c31714c547",
+    { cwd },
+  );
+  expect(agentManager.resumeAgentFromPersistence).toHaveBeenCalledWith(
+    descriptor.persistence,
+    { cwd },
+    undefined,
+    { labels: undefined },
+  );
+  expect(agentManager.hydrateTimelineFromProvider).toHaveBeenCalledWith(snapshot.id);
+  expect(agentManager.setTitle).not.toHaveBeenCalled();
   expect(result).toEqual({ snapshot, timelineSize: 2 });
 });
 

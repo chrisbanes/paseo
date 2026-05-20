@@ -238,6 +238,7 @@ function createProviderSessionEntry(
 const PROVIDER_LABELS: Record<string, string> = {
   claude: "Claude Code",
   codex: "Codex",
+  cursor: "Cursor",
   opencode: "OpenCode",
 };
 
@@ -548,6 +549,7 @@ describe("WorkspaceImportSheet", () => {
           entries: [
             createSnapshotEntry("claude"),
             createSnapshotEntry("codex"),
+            createSnapshotEntry("cursor"),
             createSnapshotEntry("opencode", { enabled: false }),
             createSnapshotEntry("z-ai"),
           ],
@@ -567,6 +569,11 @@ describe("WorkspaceImportSheet", () => {
       providers: ["codex"],
       limit: 15,
     });
+    expect(fetchRecentProviderSessions).toHaveBeenCalledWith({
+      cwd: "/repo/paseo",
+      providers: ["cursor"],
+      limit: 15,
+    });
     expect(fetchRecentProviderSessions).not.toHaveBeenCalledWith(
       expect.objectContaining({ providers: ["opencode"] }),
     );
@@ -576,6 +583,52 @@ describe("WorkspaceImportSheet", () => {
 
     await screen.findByText("Session claude");
     await screen.findByText("Session codex");
+    await screen.findByText("Session cursor");
+  });
+
+  it("imports a cursor session when its row is pressed", async () => {
+    const fetchRecentProviderSessions = vi.fn(async () => ({
+      requestId: "recent-cursor",
+      entries: [
+        createProviderSessionEntry({
+          providerId: "cursor",
+          providerLabel: "Cursor",
+          providerHandleId: "a7e6271b-a371-476d-98a6-0b2251617c46",
+          title: "Import Session Brainstorm",
+        }),
+      ],
+    }));
+    const importAgent = vi.fn(async () => ({ id: "imported-cursor-agent" }));
+    const onImportedAgent = vi.fn();
+    const onClose = vi.fn();
+
+    renderSheet(
+      { fetchRecentProviderSessions, importAgent } as Pick<
+        DaemonClient,
+        "fetchRecentProviderSessions" | "importAgent"
+      >,
+      {
+        snapshot: { supportsSnapshot: true, entries: [createSnapshotEntry("cursor")] },
+        onImportedAgent,
+        onClose,
+      },
+    );
+
+    fireEvent.click(
+      await screen.findByTestId(
+        "workspace-import-session-cursor-a7e6271b-a371-476d-98a6-0b2251617c46",
+      ),
+    );
+
+    await waitFor(() => {
+      expect(importAgent).toHaveBeenCalledWith({
+        providerId: "cursor",
+        providerHandleId: "a7e6271b-a371-476d-98a6-0b2251617c46",
+        cwd: "/repo/paseo",
+      });
+    });
+    expect(onImportedAgent).toHaveBeenCalledWith("imported-cursor-agent");
+    expect(onClose).toHaveBeenCalled();
   });
 
   it("shows partial-failure note when one provider request fails but others succeed", async () => {
