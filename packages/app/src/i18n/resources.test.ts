@@ -257,6 +257,11 @@ describe("translation resources", () => {
     expect(en.workspace.scripts.actions.run).toBe("Run");
     expect(en.workspace.git.actions.commit.label).toBe("Commit");
     expect(en.workspace.git.diff.binaryFile).toBe("Binary file");
+    expect(en.workspace.git.imageDiff.swipe).toBe("Swipe");
+    expect(en.workspace.git.imageDiff.xray).toBe("X-ray");
+    expect(en.workspace.git.imageDiff.swipePosition).toBe("Swipe position");
+    expect(en.workspace.git.imageDiff.openImagePreview).toBe("Open {{title}} image preview");
+    expect(en.workspace.git.imageDiff.heightLarge).toBe("Large");
     expect(en.workspace.git.pr.sections.checks).toBe("Checks");
     expect(en.workspace.git.pr.actions.viewPullRequest).toBe("View");
     expect(en.review.comment.placeholder).toBe("Leave a comment");

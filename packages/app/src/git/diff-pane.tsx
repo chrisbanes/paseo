@@ -59,6 +59,8 @@ import { DiffFolderRow } from "@/git/diff-folder-row";
 import { TreeIndentGuides, treeRowPaddingLeft } from "@/components/tree-primitives";
 import { SvgXml } from "react-native-svg";
 import { getFileIconSvg } from "@/components/material-file-icons";
+import { ImageDiffBody } from "@/git/image-diff-body";
+import { shouldRenderImageDiffBody } from "@/git/image-diff-helpers";
 import { useCheckoutStatusQuery } from "@/git/use-status-query";
 import { useCheckoutPrStatusQuery } from "@/git/use-pr-status-query";
 import { CommitsSection } from "@/git/commits-section/commits-section";
@@ -1048,6 +1050,8 @@ const DiffFileHeader = memo(function DiffFileHeader({
 
 export function DiffFileBody({
   file,
+  imageDiff,
+  isExpanded,
   layout,
   wrapLines,
   codeFontSize,
@@ -1057,6 +1061,15 @@ export function DiffFileBody({
   testID,
 }: {
   file: ParsedDiffFile;
+  imageDiff?: {
+    serverId: string;
+    cwd: string;
+    mode: "uncommitted" | "base";
+    baseRef?: string;
+    imageDiffsSupported: boolean;
+    onOpenFile?: (filePath: string) => void;
+  };
+  isExpanded?: boolean;
   layout: "unified" | "split";
   wrapLines: boolean;
   codeFontSize: number;
@@ -1091,6 +1104,29 @@ export function DiffFileBody({
     <View style={FILE_SECTION_BODY_STYLE} onLayout={handleLayout} testID={testID}>
       {(() => {
         if (file.status === "too_large" || file.status === "binary") {
+          if (imageDiff && shouldRenderImageDiffBody(file)) {
+            if (!imageDiff.imageDiffsSupported) {
+              return (
+                <View style={styles.statusMessageContainer}>
+                  <Text style={styles.statusMessageText}>
+                    {t("workspace.git.imageDiff.updateHost")}
+                  </Text>
+                </View>
+              );
+            }
+            return (
+              <ImageDiffBody
+                serverId={imageDiff.serverId}
+                cwd={imageDiff.cwd}
+                path={file.path}
+                oldPath={file.oldPath}
+                mode={imageDiff.mode}
+                baseRef={imageDiff.baseRef}
+                enabled={isExpanded === true}
+                onOpenFile={imageDiff.onOpenFile}
+              />
+            );
+          }
           return (
             <View style={styles.statusMessageContainer}>
               <Text style={styles.statusMessageText}>
@@ -1627,6 +1663,14 @@ interface SharedDiffViewProps {
         expandedPaths: string[];
         collapsedFolders: string[];
         reviewActions?: InlineReviewActions;
+        imageDiff: {
+          serverId: string;
+          cwd: string;
+          mode: "uncommitted" | "base";
+          baseRef?: string;
+          imageDiffsSupported: boolean;
+          onOpenFile?: (filePath: string) => void;
+        };
         onExpandedPathsChange: (paths: string[]) => void;
         onCollapsedFoldersChange: (paths: string[]) => void;
       }
@@ -1659,6 +1703,7 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
   const stickyHeaders = mode.kind === "working_tree";
   const interactive = mode.kind === "working_tree";
   const reviewActions = mode.kind === "working_tree" ? mode.reviewActions : undefined;
+  const imageDiff = mode.kind === "working_tree" ? mode.imageDiff : undefined;
   const compressedTree = useMemo(() => compressSingleChildChains(buildDiffTree(files)), [files]);
   const allFolderPaths = useMemo(() => collectDirPaths(compressedTree), [compressedTree]);
   const allFolderPathSet = useMemo(() => new Set(allFolderPaths), [allFolderPaths]);
@@ -1693,6 +1738,9 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
 
   const getBodyHeightKey = useCallback(
     (file: ParsedDiffFile): string => {
+      if (shouldRenderImageDiffBody(file)) {
+        return `${layout}:${wrapLines ? "wrap" : "scroll"}:${typographyKey}:${file.path}:image`;
+      }
       if (file.status === "too_large" || file.status === "binary") {
         return `${layout}:${wrapLines ? "wrap" : "scroll"}:${typographyKey}:${file.path}:${file.status}`;
       }
@@ -1715,6 +1763,9 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
 
   const estimateBodyHeight = useCallback(
     (file: ParsedDiffFile): number => {
+      if (shouldRenderImageDiffBody(file)) {
+        return diffBodyChromeHeight + 360;
+      }
       if (file.status === "too_large" || file.status === "binary") {
         return statusBodyHeightEstimate;
       }
@@ -1918,6 +1969,8 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
       return (
         <DiffFileBody
           file={item.file}
+          imageDiff={imageDiff}
+          isExpanded={expandedPaths.has(item.file.path)}
           layout={layout}
           wrapLines={wrapLines}
           codeFontSize={codeFontSize}
@@ -1935,6 +1988,7 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
       handleHeaderHeightChange,
       handleToggleExpanded,
       handleToggleFolder,
+      imageDiff,
       layout,
       reviewActions,
       textMetricsStyle,
@@ -1970,6 +2024,7 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
       viewMode,
       wrapLines,
       reviewActions,
+      imageDiff,
     }),
     [
       expandedPathsArray,
@@ -1977,6 +2032,7 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
       heightVersion,
       layout,
       reviewActions,
+      imageDiff,
       typographyKey,
       viewMode,
       wrapLines,
@@ -2168,6 +2224,9 @@ export function GitDiffPane({ serverId, workspaceId, cwd, enabled }: GitDiffPane
   );
   const refreshSupported = useSessionStore(
     (s) => s.sessions[serverId]?.serverInfo?.features?.checkoutRefresh === true,
+  );
+  const imageDiffsSupported = useSessionStore(
+    (s) => s.sessions[serverId]?.serverInfo?.features?.imageDiffs === true,
   );
   const runRefresh = useCheckoutGitActionsStore((s) => s.refresh);
   const isRefreshing =
@@ -2375,6 +2434,13 @@ export function GitDiffPane({ serverId, workspaceId, cwd, enabled }: GitDiffPane
       expandedPaths: stableExpandedPathsArray,
       collapsedFolders: stableCollapsedFoldersArray,
       reviewActions,
+      imageDiff: {
+        serverId,
+        cwd,
+        mode: diffMode,
+        baseRef,
+        imageDiffsSupported,
+      },
       onExpandedPathsChange: handleExpandedPathsChange,
       onCollapsedFoldersChange: handleCollapsedFoldersChange,
     }),
@@ -2383,6 +2449,11 @@ export function GitDiffPane({ serverId, workspaceId, cwd, enabled }: GitDiffPane
       stableExpandedPathsArray,
       stableCollapsedFoldersArray,
       reviewActions,
+      serverId,
+      cwd,
+      diffMode,
+      baseRef,
+      imageDiffsSupported,
       handleExpandedPathsChange,
       handleCollapsedFoldersChange,
     ],

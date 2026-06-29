@@ -12,7 +12,9 @@ import {
   type CheckoutSnapshotFacts,
   type CheckoutDiffCompare,
   type CheckoutDiffResult,
+  type CheckoutImageDiffResult,
   getCheckoutDiff,
+  getCheckoutImageDiff,
   getCheckoutSnapshotFacts,
   getCheckoutShortstat,
   getCheckoutStatus,
@@ -125,6 +127,11 @@ export interface WorkspaceGitService {
     options: CheckoutDiffCompare,
     readOptions?: WorkspaceGitReadOptions,
   ): Promise<CheckoutDiffResult>;
+  getCheckoutImageDiff(
+    cwd: string,
+    input: { path: string; oldPath?: string; compare: CheckoutDiffCompare },
+    readOptions?: WorkspaceGitReadOptions,
+  ): Promise<CheckoutImageDiffResult>;
   validateBranchRef(
     cwd: string,
     ref: string,
@@ -243,6 +250,7 @@ interface WorkspaceGitServiceDependencies {
   getCheckoutStatus: typeof getCheckoutStatus;
   getCheckoutShortstat: typeof getCheckoutShortstat;
   getCheckoutDiff: typeof getCheckoutDiff;
+  getCheckoutImageDiff: typeof getCheckoutImageDiff;
   getPullRequestStatus: typeof getPullRequestStatus;
   resolveBranchCheckout: typeof resolveBranchCheckout;
   resolveRepositoryDefaultBranch: typeof resolveRepositoryDefaultBranch;
@@ -331,6 +339,7 @@ function buildDefaultWorkspaceGitServiceDeps(): WorkspaceGitServiceDependencies 
     getCheckoutStatus,
     getCheckoutShortstat,
     getCheckoutDiff,
+    getCheckoutImageDiff,
     getPullRequestStatus,
     resolveBranchCheckout,
     resolveRepositoryDefaultBranch,
@@ -390,6 +399,10 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     string,
     WorkspaceGitAuxiliaryReadCacheEntry<CheckoutDiffResult>
   >({ max: WORKSPACE_GIT_CHECKOUT_DIFF_CACHE_MAX });
+  private readonly checkoutImageDiffCache = new LRUCache<
+    string,
+    WorkspaceGitAuxiliaryReadCacheEntry<CheckoutImageDiffResult>
+  >({ max: 16 });
   constructor(options: WorkspaceGitServiceOptions) {
     this.logger = options.logger.child({ module: "workspace-git-service" });
     this.paseoHome = options.paseoHome;
@@ -498,6 +511,30 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
         paseoHome: this.paseoHome,
         worktreesRoot: this.worktreesRoot,
       }),
+    );
+  }
+
+  getCheckoutImageDiff(
+    cwd: string,
+    input: { path: string; oldPath?: string; compare: CheckoutDiffCompare },
+    readOptions?: WorkspaceGitReadOptions,
+  ): Promise<CheckoutImageDiffResult> {
+    const normalizedCwd = resolve(cwd);
+    const normalizedCompare = this.normalizeCheckoutDiffOptions(input.compare);
+    const key = JSON.stringify([normalizedCwd, input.path, input.oldPath ?? "", normalizedCompare]);
+    return this.readAuxiliaryCache(this.checkoutImageDiffCache, key, readOptions, () =>
+      this.deps.getCheckoutImageDiff(
+        normalizedCwd,
+        {
+          path: input.path,
+          ...(input.oldPath ? { oldPath: input.oldPath } : {}),
+          compare: normalizedCompare,
+        },
+        {
+          paseoHome: this.paseoHome,
+          worktreesRoot: this.worktreesRoot,
+        },
+      ),
     );
   }
 
