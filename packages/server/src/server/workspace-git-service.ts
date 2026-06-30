@@ -52,6 +52,8 @@ const WORKSPACE_GIT_AUXILIARY_READ_TTL_MS = 15_000;
 const WORKSPACE_GIT_INTERNAL_MIN_GAP_MS = 2_000;
 // Heavy values (multi-MB highlighted diffs); cap aggressively. Ephemeral worktree cwds would otherwise pile up forever.
 const WORKSPACE_GIT_CHECKOUT_DIFF_CACHE_MAX = 64;
+const WORKSPACE_GIT_IMAGE_DIFF_CACHE_MAX = 16;
+const WORKSPACE_GIT_IMAGE_DIFF_CACHE_MAX_SIZE = 64 * 1024 * 1024;
 // Small values (booleans, short strings, small arrays); generous cap.
 const WORKSPACE_GIT_AUXILIARY_CACHE_MAX = 256;
 const WORKSPACE_GIT_FACTS_REUSE_TTL_MS = 1_000;
@@ -326,6 +328,35 @@ interface WorkspaceGitAuxiliaryReadCacheEntry<T> {
   inFlight: Promise<T> | null;
 }
 
+type CheckoutImageDiffPayload =
+  | CheckoutImageDiffResult["oldImage"]
+  | CheckoutImageDiffResult["newImage"]
+  | CheckoutImageDiffResult["diffImage"];
+
+function imageDiffCacheEntrySize(
+  entry: WorkspaceGitAuxiliaryReadCacheEntry<CheckoutImageDiffResult>,
+): number {
+  const value = entry.value;
+  if (!value) {
+    return 1;
+  }
+
+  return Math.max(
+    1,
+    imageDiffPayloadCacheSize(value.oldImage) +
+      imageDiffPayloadCacheSize(value.newImage) +
+      imageDiffPayloadCacheSize(value.diffImage),
+  );
+}
+
+function imageDiffPayloadCacheSize(payload: CheckoutImageDiffPayload): number {
+  if (payload.status !== "available") {
+    return 128;
+  }
+
+  return payload.content.length + 128;
+}
+
 interface WorkspaceGitHubPollTarget {
   headRef: string;
   headRepositoryOwner?: string;
@@ -402,7 +433,11 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
   private readonly checkoutImageDiffCache = new LRUCache<
     string,
     WorkspaceGitAuxiliaryReadCacheEntry<CheckoutImageDiffResult>
-  >({ max: 16 });
+  >({
+    max: WORKSPACE_GIT_IMAGE_DIFF_CACHE_MAX,
+    maxSize: WORKSPACE_GIT_IMAGE_DIFF_CACHE_MAX_SIZE,
+    sizeCalculation: imageDiffCacheEntrySize,
+  });
   constructor(options: WorkspaceGitServiceOptions) {
     this.logger = options.logger.child({ module: "workspace-git-service" });
     this.paseoHome = options.paseoHome;
@@ -799,6 +834,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
       .then((value) => {
         entry.value = value;
         entry.loadedAtMs = this.deps.now().getTime();
+        cache.set(key, entry);
         return value;
       })
       .finally(() => {

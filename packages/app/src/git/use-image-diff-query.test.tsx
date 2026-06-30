@@ -62,6 +62,7 @@ describe("useImageDiffQuery", () => {
     );
 
     await waitFor(() => expect(result.current.data?.path).toBe("after.png"));
+    expect(result.current.isStale).toBe(false);
     expect(mocks.checkoutGetImageDiff).toHaveBeenCalledWith(
       "/repo",
       {

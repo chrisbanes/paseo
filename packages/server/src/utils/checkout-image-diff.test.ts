@@ -30,6 +30,19 @@ async function png(color: { r: number; g: number; b: number; alpha?: number }): 
     .toBuffer();
 }
 
+async function jpeg(color: { r: number; g: number; b: number }): Promise<Buffer> {
+  return sharp({
+    create: {
+      width: 2,
+      height: 2,
+      channels: 3,
+      background: color,
+    },
+  })
+    .jpeg()
+    .toBuffer();
+}
+
 async function sizedPng(width: number, height: number): Promise<Buffer> {
   return sharp({
     create: {
@@ -124,6 +137,23 @@ describe("getCheckoutImageDiff", () => {
     expectAvailableImage(result.oldImage);
     expectAvailableImage(result.newImage);
     expectAvailableImage(result.diffImage);
+  });
+
+  it("uses the oldPath extension for the old side MIME type", async () => {
+    const repo = await createRepo();
+    await commitImage(repo, "before.jpg", await jpeg({ r: 255, g: 0, b: 0 }));
+    await runGitCommand(["mv", "before.jpg", "after.png"], { cwd: repo });
+    await writeFile(join(repo, "after.png"), await png({ r: 0, g: 255, b: 0 }));
+
+    const result = await getCheckoutImageDiff(repo, {
+      path: "after.png",
+      oldPath: "before.jpg",
+      compare: { mode: "uncommitted" },
+    });
+
+    expect(result.oldImage).toMatchObject({ status: "available", mimeType: "image/jpeg" });
+    expect(result.newImage).toMatchObject({ status: "available", mimeType: "image/png" });
+    expect(result.diffImage).toMatchObject({ status: "available", mimeType: "image/png" });
   });
 
   it("rejects paths outside the repository", async () => {

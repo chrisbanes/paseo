@@ -1,5 +1,5 @@
 import { resolve, dirname, basename, extname, normalize, sep } from "path";
-import { existsSync, realpathSync } from "fs";
+import { constants, existsSync, realpathSync } from "fs";
 import { lstat, open as openFile, readFile, realpath, stat as statFile } from "fs/promises";
 import { TTLCache } from "@isaacs/ttlcache";
 import type { CheckoutCommit, CheckoutCommitFile } from "@getpaseo/protocol/messages";
@@ -2948,21 +2948,26 @@ async function readImageSideFromWorkingTree(
   const absolutePath = resolve(cwd, path);
   try {
     await assertSafeWorkingTreeFile(cwd, path);
-    const stats = await statFile(absolutePath);
-    if (!stats.isFile()) {
-      return missingImageSide();
+    const handle = await openImageFileNoFollow(absolutePath);
+    try {
+      const stats = await handle.stat();
+      if (!stats.isFile()) {
+        return missingImageSide();
+      }
+      if (stats.size > IMAGE_DIFF_MAX_SIDE_BYTES) {
+        return {
+          payload: {
+            status: "too_large",
+            size: stats.size,
+            maxSize: IMAGE_DIFF_MAX_SIDE_BYTES,
+          },
+          bytes: null,
+        };
+      }
+      return availableImageSide(await handle.readFile(), mimeType);
+    } finally {
+      await handle.close();
     }
-    if (stats.size > IMAGE_DIFF_MAX_SIDE_BYTES) {
-      return {
-        payload: {
-          status: "too_large",
-          size: stats.size,
-          maxSize: IMAGE_DIFF_MAX_SIDE_BYTES,
-        },
-        bytes: null,
-      };
-    }
-    return availableImageSide(await readFile(absolutePath), mimeType);
   } catch (error) {
     if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
       return missingImageSide();
@@ -2974,6 +2979,17 @@ async function readImageSideFromWorkingTree(
       },
       bytes: null,
     };
+  }
+}
+
+async function openImageFileNoFollow(absolutePath: string) {
+  try {
+    return await openFile(absolutePath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ELOOP") {
+      throw new Error("Image diff path must not be a symlink", { cause: error });
+    }
+    throw error;
   }
 }
 
@@ -3031,8 +3047,10 @@ async function buildImageDiff(
   }
 
   try {
-    const oldRaw = await sharp(oldBytes).ensureAlpha().raw().toBuffer();
-    const newRaw = await sharp(newBytes).ensureAlpha().raw().toBuffer();
+    const [oldRaw, newRaw] = await Promise.all([
+      sharp(oldBytes).ensureAlpha().raw().toBuffer(),
+      sharp(newBytes).ensureAlpha().raw().toBuffer(),
+    ]);
     const changed = Buffer.alloc(oldRaw.length);
     for (let i = 0; i < oldRaw.length; i += 4) {
       const different =
@@ -3083,8 +3101,8 @@ export async function getCheckoutImageDiff(
     assertSafeRelativeGitPath(input.oldPath);
   }
 
-  const mimeType = imageMimeTypeForPath(input.path);
-  if (!mimeType) {
+  const newMimeType = imageMimeTypeForPath(input.path);
+  if (!newMimeType) {
     return {
       cwd,
       path: input.path,
@@ -3106,10 +3124,16 @@ export async function getCheckoutImageDiff(
   }
 
   const oldPath = input.oldPath ?? input.path;
-  const oldSide = await readImageSideFromGitRef(cwd, refs.baseRef, oldPath, mimeType);
+  const oldMimeType = imageMimeTypeForPath(oldPath);
+  const oldSide: ImageSide = oldMimeType
+    ? await readImageSideFromGitRef(cwd, refs.baseRef, oldPath, oldMimeType)
+    : {
+        payload: { status: "unsupported", mimeType: null },
+        bytes: null,
+      };
   const newSide = refs.targetRef
-    ? await readImageSideFromGitRef(cwd, refs.targetRef, input.path, mimeType)
-    : await readImageSideFromWorkingTree(cwd, input.path, mimeType);
+    ? await readImageSideFromGitRef(cwd, refs.targetRef, input.path, newMimeType)
+    : await readImageSideFromWorkingTree(cwd, input.path, newMimeType);
   const diffImage = await buildImageDiff(oldSide, newSide);
 
   return {

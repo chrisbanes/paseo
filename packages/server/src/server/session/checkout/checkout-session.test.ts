@@ -528,10 +528,12 @@ describe("CheckoutSession", () => {
   describe("image diff", () => {
     it("emits checkout image diff response from workspace git service", async () => {
       let receivedInput: { path: string; oldPath?: string } | null = null;
+      let receivedReadOptions: { force?: boolean; reason?: string } | undefined;
       const { checkout, emitted } = makeCheckoutSession({
         git: {
-          getCheckoutImageDiff: async (cwd, input) => {
+          getCheckoutImageDiff: async (cwd, input, readOptions) => {
             receivedInput = input;
+            receivedReadOptions = readOptions;
             return {
               cwd,
               path: input.path,
@@ -561,6 +563,10 @@ describe("CheckoutSession", () => {
       });
 
       expect(receivedInput).toMatchObject({ path: "after.png", oldPath: "before.png" });
+      expect(receivedReadOptions).toEqual({
+        force: true,
+        reason: "checkout-image-diff-rpc",
+      });
       expect(emitted).toEqual([
         {
           type: "checkout.diff.get_image.response",

@@ -1,6 +1,6 @@
-import { skipToken, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import type { CheckoutDiffGetImageResponse } from "@getpaseo/protocol/messages";
+import { useFetchQuery } from "@/data/query";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { checkoutImageDiffQueryKey } from "@/git/query-keys";
 
@@ -53,18 +53,21 @@ export function useImageDiffQuery({
     compare.ignoreWhitespace,
   );
   const canLoad = enabled && Boolean(client) && isConnected && cwd.length > 0 && path.length > 0;
-  const activeClient = canLoad ? client : null;
 
-  return useQuery<ImageDiffPayload>({
+  return useFetchQuery<ImageDiffPayload>({
     queryKey,
-    queryFn: activeClient
-      ? () =>
-          activeClient.checkoutGetImageDiff(
-            cwd,
-            { path, ...(oldPath ? { oldPath } : {}), compare },
-            `imageDiff:${serverId}:${cwd}:${path}:${Date.now()}`,
-          )
-      : skipToken,
-    staleTime: 0,
+    queryFn: () => {
+      if (!client) {
+        throw new Error("Daemon client unavailable");
+      }
+      return client.checkoutGetImageDiff(
+        cwd,
+        { path, ...(oldPath ? { oldPath } : {}), compare },
+        `imageDiff:${serverId}:${cwd}:${path}:${Date.now()}`,
+      );
+    },
+    enabled: canLoad,
+    dataShape: "value",
+    staleTimeMs: 30_000,
   });
 }
