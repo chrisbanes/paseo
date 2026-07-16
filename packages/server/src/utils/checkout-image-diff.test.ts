@@ -1,4 +1,4 @@
-import { mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -91,6 +91,23 @@ describe("getCheckoutImageDiff", () => {
       width: 2,
       height: 2,
     });
+  });
+
+  it("reads repo-relative image paths from a subdirectory workspace", async () => {
+    const repo = await createRepo();
+    const workspace = join(repo, "sub");
+    await mkdir(workspace);
+    await commitImage(repo, "sub/baseline.png", await png({ r: 255, g: 0, b: 0 }));
+    await writeFile(join(workspace, "baseline.png"), await png({ r: 0, g: 255, b: 0 }));
+
+    const result = await getCheckoutImageDiff(workspace, {
+      path: "sub/baseline.png",
+      compare: { mode: "uncommitted" },
+    });
+
+    expectAvailableImage(result.oldImage);
+    expectAvailableImage(result.newImage);
+    expectAvailableImage(result.diffImage);
   });
 
   it("returns only the new side for an untracked image", async () => {

@@ -541,6 +541,9 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     const normalizedCwd = resolve(cwd);
     const normalizedOptions = this.normalizeCheckoutDiffOptions(options);
     const key = this.buildCheckoutDiffCacheKey(normalizedCwd, normalizedOptions);
+    if (readOptions?.force) {
+      this.invalidateCheckoutImageDiffCache(normalizedCwd);
+    }
     return this.readAuxiliaryCache(this.checkoutDiffCache, key, readOptions, () =>
       this.deps.getCheckoutDiff(normalizedCwd, normalizedOptions, {
         paseoHome: this.paseoHome,
@@ -582,6 +585,15 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
       ...(options.ignoreWhitespace === true ? { ignoreWhitespace: true } : {}),
       ...(options.includeStructured === true ? { includeStructured: true } : {}),
     };
+  }
+
+  private invalidateCheckoutImageDiffCache(cwd: string): void {
+    const keyPrefix = `[${JSON.stringify(cwd)},`;
+    for (const key of this.checkoutImageDiffCache.keys()) {
+      if (key.startsWith(keyPrefix)) {
+        this.checkoutImageDiffCache.delete(key);
+      }
+    }
   }
 
   private buildCheckoutDiffCacheKey(cwd: string, options: CheckoutDiffCompare): string {

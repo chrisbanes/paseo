@@ -2963,9 +2963,10 @@ async function readImageSideFromWorkingTree(
   path: string,
   mimeType: string,
 ): Promise<ImageSide> {
-  const absolutePath = resolve(cwd, path);
+  const worktreeRoot = (await getWorktreeRoot(cwd)) ?? cwd;
+  const absolutePath = resolve(worktreeRoot, path);
   try {
-    await assertSafeWorkingTreeFile(cwd, path);
+    await assertSafeWorkingTreeFile(worktreeRoot, path);
     const handle = await openImageFileNoFollow(absolutePath);
     try {
       const stats = await handle.stat();
@@ -3011,9 +3012,11 @@ async function openImageFileNoFollow(absolutePath: string) {
   }
 }
 
-async function assertSafeWorkingTreeFile(cwd: string, relativePath: string): Promise<void> {
-  const worktreeRoot = (await getWorktreeRoot(cwd)) ?? cwd;
-  const absolutePath = resolve(cwd, relativePath);
+async function assertSafeWorkingTreeFile(
+  worktreeRoot: string,
+  relativePath: string,
+): Promise<void> {
+  const absolutePath = resolve(worktreeRoot, relativePath);
   const linkStats = await lstat(absolutePath);
   if (linkStats.isSymbolicLink()) {
     throw new Error("Image diff path must not be a symlink");
