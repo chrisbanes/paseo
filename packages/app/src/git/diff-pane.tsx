@@ -1271,6 +1271,7 @@ interface GitDiffPaneProps {
   workspaceId?: string | null;
   cwd: string;
   enabled?: boolean;
+  onOpenFile?: (filePath: string) => void;
 }
 
 type PressableStyleFn = (
@@ -1989,6 +1990,7 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
       handleToggleExpanded,
       handleToggleFolder,
       imageDiff,
+      expandedPaths,
       layout,
       reviewActions,
       textMetricsStyle,
@@ -2162,7 +2164,7 @@ function shouldEnableCheckoutDiff(input: { paneEnabled: boolean; isGit: boolean 
   return input.paneEnabled && input.isGit;
 }
 
-export function GitDiffPane({ serverId, workspaceId, cwd, enabled }: GitDiffPaneProps) {
+export function GitDiffPane({ serverId, workspaceId, cwd, enabled, onOpenFile }: GitDiffPaneProps) {
   const { settings: appSettings } = useAppSettings();
   const { t } = useTranslation();
   const isMobile = useIsCompactFormFactor();
@@ -2440,6 +2442,7 @@ export function GitDiffPane({ serverId, workspaceId, cwd, enabled }: GitDiffPane
         mode: diffMode,
         baseRef,
         imageDiffsSupported,
+        onOpenFile,
       },
       onExpandedPathsChange: handleExpandedPathsChange,
       onCollapsedFoldersChange: handleCollapsedFoldersChange,
@@ -2454,6 +2457,7 @@ export function GitDiffPane({ serverId, workspaceId, cwd, enabled }: GitDiffPane
       diffMode,
       baseRef,
       imageDiffsSupported,
+      onOpenFile,
       handleExpandedPathsChange,
       handleCollapsedFoldersChange,
     ],
