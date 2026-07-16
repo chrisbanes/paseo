@@ -3552,7 +3552,7 @@ export class DaemonClient {
     input: {
       path: string;
       oldPath?: string;
-      compare: { mode: "uncommitted" | "base"; baseRef?: string; ignoreWhitespace?: boolean };
+      compare: { mode: "uncommitted" | "base"; baseRef?: string };
     },
     requestId?: string,
   ): Promise<CheckoutDiffGetImagePayload> {

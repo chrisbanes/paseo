@@ -1,4 +1,4 @@
-import { resolve, dirname, basename, extname, normalize, sep } from "path";
+import { resolve, dirname, basename, extname, isAbsolute, normalize, sep, win32 } from "path";
 import { constants, existsSync, realpathSync } from "fs";
 import { lstat, open as openFile, readFile, realpath, stat as statFile } from "fs/promises";
 import { TTLCache } from "@isaacs/ttlcache";
@@ -1833,7 +1833,7 @@ function buildPlaceholderParsedDiffFile(
   change: CheckoutFileChange,
   options: { status: "too_large" | "binary"; stat?: FileStat },
 ): ParsedDiffFile {
-  const mimeType = options.status === "binary" ? imageMimeTypeForPath(change.path) : null;
+  const isImage = options.status === "binary" && imageMimeTypeForPath(change.path) !== null;
   return {
     path: change.path,
     ...(change.oldPath && change.oldPath !== change.path ? { oldPath: change.oldPath } : null),
@@ -1843,7 +1843,7 @@ function buildPlaceholderParsedDiffFile(
     deletions: options.stat?.deletions ?? 0,
     hunks: [],
     status: options.status,
-    ...(mimeType ? { binaryKind: "image" as const, mimeType } : null),
+    ...(isImage ? { binaryKind: "image" as const } : null),
   };
 }
 
@@ -2765,15 +2765,31 @@ function imageMimeTypeForPath(filePath: string): string | null {
 function assertSafeRelativeGitPath(relativePath: string): void {
   if (
     relativePath.trim().length === 0 ||
-    relativePath.startsWith("/") ||
+    isAbsolute(relativePath) ||
+    win32.isAbsolute(relativePath) ||
     relativePath.includes("\0")
   ) {
     throw new Error("Image diff path must be a repository-relative file path");
   }
   const normalized = normalize(relativePath);
-  if (normalized === ".." || normalized.startsWith(`..${sep}`)) {
+  const windowsNormalized = win32.normalize(relativePath);
+  if (
+    normalized === ".." ||
+    normalized.startsWith(`..${sep}`) ||
+    windowsNormalized === ".." ||
+    windowsNormalized.startsWith(`..${win32.sep}`)
+  ) {
     throw new Error("Image diff path must stay inside the repository");
   }
+}
+
+function isMissingGitBlobError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    message.includes("exists on disk, but not in") ||
+    message.includes("fatal: invalid object name 'HEAD'.") ||
+    /fatal: path '.+' does not exist in '.+'/.test(message)
+  );
 }
 
 async function readGitBlobSize(cwd: string, ref: string, path: string): Promise<number | null> {
@@ -2785,8 +2801,11 @@ async function readGitBlobSize(cwd: string, ref: string, path: string): Promise<
     });
     const size = Number.parseInt(result.stdout.trim(), 10);
     return Number.isFinite(size) ? size : null;
-  } catch {
-    return null;
+  } catch (error) {
+    if (isMissingGitBlobError(error)) {
+      return null;
+    }
+    throw error;
   }
 }
 
@@ -2861,8 +2880,7 @@ async function readGitBlobBytes(cwd: string, ref: string, path: string): Promise
       maxOutputBytes: IMAGE_DIFF_MAX_SIDE_BYTES,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (message.includes("exists on disk, but not in") || message.includes("does not exist")) {
+    if (isMissingGitBlobError(error)) {
       return null;
     }
     throw error;
@@ -2916,17 +2934,17 @@ async function readImageSideFromGitRef(
   path: string,
   mimeType: string,
 ): Promise<ImageSide> {
-  const size = await readGitBlobSize(cwd, ref, path);
-  if (size === null) {
-    return missingImageSide();
-  }
-  if (size > IMAGE_DIFF_MAX_SIDE_BYTES) {
-    return {
-      payload: { status: "too_large", size, maxSize: IMAGE_DIFF_MAX_SIDE_BYTES },
-      bytes: null,
-    };
-  }
   try {
+    const size = await readGitBlobSize(cwd, ref, path);
+    if (size === null) {
+      return missingImageSide();
+    }
+    if (size > IMAGE_DIFF_MAX_SIDE_BYTES) {
+      return {
+        payload: { status: "too_large", size, maxSize: IMAGE_DIFF_MAX_SIDE_BYTES },
+        bytes: null,
+      };
+    }
     const bytes = await readGitBlobBytes(cwd, ref, path);
     return bytes ? availableImageSide(bytes, mimeType) : missingImageSide();
   } catch (error) {
@@ -3125,15 +3143,16 @@ export async function getCheckoutImageDiff(
 
   const oldPath = input.oldPath ?? input.path;
   const oldMimeType = imageMimeTypeForPath(oldPath);
-  const oldSide: ImageSide = oldMimeType
-    ? await readImageSideFromGitRef(cwd, refs.baseRef, oldPath, oldMimeType)
-    : {
+  const oldSidePromise: Promise<ImageSide> = oldMimeType
+    ? readImageSideFromGitRef(cwd, refs.baseRef, oldPath, oldMimeType)
+    : Promise.resolve({
         payload: { status: "unsupported", mimeType: null },
         bytes: null,
-      };
-  const newSide = refs.targetRef
-    ? await readImageSideFromGitRef(cwd, refs.targetRef, input.path, newMimeType)
-    : await readImageSideFromWorkingTree(cwd, input.path, newMimeType);
+      });
+  const newSidePromise = refs.targetRef
+    ? readImageSideFromGitRef(cwd, refs.targetRef, input.path, newMimeType)
+    : readImageSideFromWorkingTree(cwd, input.path, newMimeType);
+  const [oldSide, newSide] = await Promise.all([oldSidePromise, newSidePromise]);
   const diffImage = await buildImageDiff(oldSide, newSide);
 
   return {

@@ -347,18 +347,11 @@ export class CheckoutSession {
   async handleCheckoutDiffGetImageRequest(msg: CheckoutDiffGetImageRequest): Promise<void> {
     const cwd = expandTilde(msg.cwd);
     try {
-      const result = await this.workspaceGitService.getCheckoutImageDiff(
-        cwd,
-        {
-          path: msg.path,
-          ...(msg.oldPath ? { oldPath: msg.oldPath } : {}),
-          compare: msg.compare,
-        },
-        {
-          force: true,
-          reason: "checkout-image-diff-rpc",
-        },
-      );
+      const result = await this.workspaceGitService.getCheckoutImageDiff(cwd, {
+        path: msg.path,
+        ...(msg.oldPath ? { oldPath: msg.oldPath } : {}),
+        compare: msg.compare,
+      });
       this.host.emit({
         type: "checkout.diff.get_image.response",
         payload: {

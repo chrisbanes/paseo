@@ -102,7 +102,7 @@ describe("getCheckoutImageDiff", () => {
       compare: { mode: "uncommitted" },
     });
 
-    expect(result.oldImage.status).toBe("missing");
+    expect(result.oldImage).toEqual({ status: "missing" });
     expect(result.newImage.status).toBe("available");
     expect(result.diffImage.status).toBe("missing");
   });
@@ -165,6 +165,17 @@ describe("getCheckoutImageDiff", () => {
         compare: { mode: "uncommitted" },
       }),
     ).rejects.toThrow(/inside the repository/i);
+  });
+
+  it("rejects absolute Windows paths", async () => {
+    const repo = await createRepo();
+
+    await expect(
+      getCheckoutImageDiff(repo, {
+        path: String.raw`C:\outside.png`,
+        compare: { mode: "uncommitted" },
+      }),
+    ).rejects.toThrow(/repository-relative/i);
   });
 
   it("returns too_large instead of bytes when a side exceeds the cap", async () => {

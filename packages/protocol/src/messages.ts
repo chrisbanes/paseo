@@ -1996,7 +1996,6 @@ const ParsedDiffFileSchema = z.object({
   hunks: z.array(DiffHunkSchema),
   status: z.enum(["ok", "too_large", "binary"]).optional(),
   binaryKind: z.enum(["image"]).optional(),
-  mimeType: z.string().optional(),
 });
 
 const FileExplorerEntrySchema = z.object({

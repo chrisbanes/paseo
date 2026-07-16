@@ -26,7 +26,6 @@ export interface ParsedDiffFile {
   hunks: DiffHunk[];
   status?: "ok" | "too_large" | "binary";
   binaryKind?: "image";
-  mimeType?: string;
 }
 
 interface HighlightDiffWithFileContentOptions {

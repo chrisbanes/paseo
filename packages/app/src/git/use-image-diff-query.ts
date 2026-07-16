@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import type { CheckoutDiffGetImageResponse } from "@getpaseo/protocol/messages";
 import { useFetchQuery } from "@/data/query";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
@@ -11,14 +12,12 @@ interface UseImageDiffQueryOptions {
   oldPath?: string;
   mode: "uncommitted" | "base";
   baseRef?: string;
-  ignoreWhitespace?: boolean;
   enabled: boolean;
 }
 
 interface ImageDiffCompare {
   mode: "uncommitted" | "base";
   baseRef?: string;
-  ignoreWhitespace: boolean;
 }
 
 export type ImageDiffPayload = CheckoutDiffGetImageResponse["payload"];
@@ -30,18 +29,17 @@ export function useImageDiffQuery({
   oldPath,
   mode,
   baseRef,
-  ignoreWhitespace,
   enabled,
 }: UseImageDiffQueryOptions) {
+  const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
   const compare = useMemo<ImageDiffCompare>(
     () => ({
       mode,
       ...(mode === "base" && baseRef?.trim() ? { baseRef: baseRef.trim() } : {}),
-      ignoreWhitespace: ignoreWhitespace === true,
     }),
-    [baseRef, ignoreWhitespace, mode],
+    [baseRef, mode],
   );
   const queryKey = checkoutImageDiffQueryKey(
     serverId,
@@ -50,7 +48,6 @@ export function useImageDiffQuery({
     oldPath,
     compare.mode,
     compare.baseRef,
-    compare.ignoreWhitespace,
   );
   const canLoad = enabled && Boolean(client) && isConnected && cwd.length > 0 && path.length > 0;
 
@@ -58,13 +55,13 @@ export function useImageDiffQuery({
     queryKey,
     queryFn: () => {
       if (!client) {
-        throw new Error("Daemon client unavailable");
+        throw new Error(t("common.errors.daemonClientUnavailable"));
       }
-      return client.checkoutGetImageDiff(
-        cwd,
-        { path, ...(oldPath ? { oldPath } : {}), compare },
-        `imageDiff:${serverId}:${cwd}:${path}:${Date.now()}`,
-      );
+      return client.checkoutGetImageDiff(cwd, {
+        path,
+        ...(oldPath ? { oldPath } : {}),
+        compare,
+      });
     },
     enabled: canLoad,
     dataShape: "value",

@@ -44,7 +44,6 @@ interface ImageDiffBodyProps {
   oldPath?: string;
   mode: "uncommitted" | "base";
   baseRef?: string;
-  ignoreWhitespace?: boolean;
   enabled: boolean;
   onOpenFile?: (path: string) => void;
 }
@@ -327,16 +326,16 @@ function ImageDiffContent({
   );
 }
 
-function ModePicker<TMode extends string>({
+function ModePicker({
   mode,
   modes,
   onChange,
   labelForMode,
 }: {
-  mode: TMode;
-  modes: readonly TMode[];
-  onChange: (mode: TMode) => void;
-  labelForMode: (mode: TMode) => string;
+  mode: ImageDiffMode;
+  modes: readonly ImageDiffMode[];
+  onChange: (mode: ImageDiffMode) => void;
+  labelForMode: (mode: ImageDiffMode) => string;
 }) {
   return (
     <View style={styles.modePicker}>
@@ -376,8 +375,14 @@ function ImageDiffSlider({
     },
     [onValueChange],
   );
-  const fillStyle = React.useMemo(() => compactSliderFillStyle(value), [value]);
-  const thumbStyle = React.useMemo(() => compactSliderThumbStyle(value), [value]);
+  const fillStyle = React.useMemo(
+    () => [styles.sliderLineFill, { width: percentageWidth(value) }],
+    [value],
+  );
+  const thumbStyle = React.useMemo(
+    () => [styles.sliderThumb, { left: percentageWidth(value) }],
+    [value],
+  );
   const roundedValue = Math.round(value);
   const accessibilityValue = React.useMemo(
     () => ({ min: 0, max: 100, now: roundedValue }),
@@ -421,16 +426,16 @@ function ImageDiffSlider({
   );
 }
 
-function ModeButton<TMode extends string>({
+function ModeButton({
   label,
   mode,
   selected,
   onChange,
 }: {
   label: string;
-  mode: TMode;
+  mode: ImageDiffMode;
   selected: boolean;
-  onChange: (mode: TMode) => void;
+  onChange: (mode: ImageDiffMode) => void;
 }) {
   const handlePress = React.useCallback(() => {
     onChange(mode);
@@ -479,13 +484,13 @@ function SwipeView({
     imageWidth: newImage.width,
     swipePosition,
   });
-  const frameStyle = React.useMemo(() => imageFrameStyle(height), [height]);
+  const frameStyle = React.useMemo(() => [styles.compareFrame, { height }], [height]);
   const swipeClipStyle = React.useMemo(
-    () => buildSwipeClipStyle(effectiveSwipePosition),
+    () => [styles.swipeClip, { width: percentageWidth(effectiveSwipePosition) }],
     [effectiveSwipePosition],
   );
   const swipeImageFrameStyle = React.useMemo(
-    () => buildSwipeImageFrameStyle(frameWidth),
+    () => [styles.compareImage, { width: frameWidth > 0 ? frameWidth : percentageWidth(100) }],
     [frameWidth],
   );
   const handleSwipeDrag = React.useCallback(
@@ -507,7 +512,7 @@ function SwipeView({
     [frameWidth, height, newImage.height, newImage.width, onSwipePositionChange],
   );
   const swipeHandleStyle = React.useMemo(
-    () => buildSwipeHandleStyle(effectiveSwipePosition),
+    () => [styles.swipeHandle, { left: percentageWidth(effectiveSwipePosition) }],
     [effectiveSwipePosition],
   );
 
@@ -585,8 +590,11 @@ function OnionSkinView({
 }) {
   const oldSource = React.useMemo(() => ({ uri: imageUri(oldImage) }), [oldImage]);
   const newSource = React.useMemo(() => ({ uri: imageUri(newImage) }), [newImage]);
-  const frameStyle = React.useMemo(() => imageFrameStyle(height), [height]);
-  const onionImageStyle = React.useMemo(() => buildOnionImageStyle(onionOpacity), [onionOpacity]);
+  const frameStyle = React.useMemo(() => [styles.compareFrame, { height }], [height]);
+  const onionImageStyle = React.useMemo(
+    () => [styles.onionImage, { opacity: onionOpacity }],
+    [onionOpacity],
+  );
 
   return (
     <View style={styles.comparePanel} testID="image-diff-onion-view">
@@ -695,7 +703,7 @@ function AvailableImageView({
   height: number;
 }) {
   const source = React.useMemo(() => ({ uri: imageUri(image) }), [image]);
-  const surfaceStyle = React.useMemo(() => imageSurfaceStyle(height), [height]);
+  const surfaceStyle = React.useMemo(() => [styles.imageSurface, { height }], [height]);
   const { t } = useTranslation();
   const imageContent = (
     <View style={surfaceStyle} testID="image-diff-panel-surface">
@@ -732,50 +740,14 @@ function AvailableImageView({
 
 function OverlayImage({ image, opacity }: { image: AvailableImage; opacity: number }) {
   const source = React.useMemo(() => ({ uri: imageUri(image) }), [image]);
-  const style = React.useMemo(() => overlayImageStyle(opacity), [opacity]);
+  const style = React.useMemo(() => [styles.overlayImage, { opacity }], [opacity]);
   return (
     <RNImage source={source} style={style} resizeMode="contain" testID="image-diff-overlay-image" />
   );
 }
 
-function imageSurfaceStyle(height: number) {
-  return [styles.imageSurface, { height }];
-}
-
-function imageFrameStyle(height: number) {
-  return [styles.compareFrame, { height }];
-}
-
-function buildSwipeClipStyle(position: number) {
-  return [styles.swipeClip, { width: percentageWidth(position) }];
-}
-
-function buildSwipeHandleStyle(position: number) {
-  return [styles.swipeHandle, { left: percentageWidth(position) }];
-}
-
-function buildSwipeImageFrameStyle(frameWidth: number) {
-  return [styles.compareImage, { width: frameWidth > 0 ? frameWidth : percentageWidth(100) }];
-}
-
 function returnTrue() {
   return true;
-}
-
-function buildOnionImageStyle(opacity: number) {
-  return [styles.onionImage, { opacity }];
-}
-
-function overlayImageStyle(opacity: number) {
-  return [styles.overlayImage, { opacity }];
-}
-
-function compactSliderFillStyle(value: number) {
-  return [styles.sliderLineFill, { width: percentageWidth(value) }];
-}
-
-function compactSliderThumbStyle(value: number) {
-  return [styles.sliderThumb, { left: percentageWidth(value) }];
 }
 
 function StatusMessage({ label }: { label: string }) {

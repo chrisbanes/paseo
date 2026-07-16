@@ -23,7 +23,6 @@ describe("image diff protocol", () => {
             hunks: [],
             status: "binary",
             binaryKind: "image",
-            mimeType: "image/png",
           },
         ],
         error: null,
@@ -34,7 +33,6 @@ describe("image diff protocol", () => {
     expect(parsed.payload.files[0]).toMatchObject({
       status: "binary",
       binaryKind: "image",
-      mimeType: "image/png",
     });
   });
 
@@ -55,7 +53,6 @@ describe("image diff protocol", () => {
             hunks: [],
             status: "binary",
             binaryKind: "image",
-            mimeType: "image/png",
           },
         ],
         error: null,

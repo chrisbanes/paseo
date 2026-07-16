@@ -519,7 +519,6 @@ const x = 1;
       path: "baseline.png",
       status: "binary",
       binaryKind: "image",
-      mimeType: "image/png",
     });
   });
 
