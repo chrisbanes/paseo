@@ -12,6 +12,7 @@ import {
   type CheckoutSnapshotFacts,
   type CheckoutDiffCompare,
   type CheckoutDiffResult,
+  type CheckoutImageDiffInput,
   type CheckoutImageDiffResult,
   getCheckoutDiff,
   getCheckoutImageDiff,
@@ -131,7 +132,7 @@ export interface WorkspaceGitService {
   ): Promise<CheckoutDiffResult>;
   getCheckoutImageDiff(
     cwd: string,
-    input: { path: string; oldPath?: string; compare: CheckoutDiffCompare },
+    input: CheckoutImageDiffInput,
     readOptions?: WorkspaceGitReadOptions,
   ): Promise<CheckoutImageDiffResult>;
   validateBranchRef(
@@ -554,7 +555,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
 
   getCheckoutImageDiff(
     cwd: string,
-    input: { path: string; oldPath?: string; compare: CheckoutDiffCompare },
+    input: CheckoutImageDiffInput,
     readOptions?: WorkspaceGitReadOptions,
   ): Promise<CheckoutImageDiffResult> {
     const normalizedCwd = resolve(cwd);

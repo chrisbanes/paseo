@@ -176,14 +176,13 @@ describe("server data push router", () => {
     const serverId = "server-1";
     const cwd = "/repo";
     const queryKey = checkoutDiffQueryKey(serverId, cwd, "base", "main", true);
-    const imageQueryKey = checkoutImageDiffQueryKey(
+    const imageQueryKey = checkoutImageDiffQueryKey({
       serverId,
       cwd,
-      "image.png",
-      undefined,
-      "base",
-      "main",
-    );
+      path: "image.png",
+      mode: "base",
+      baseRef: "main",
+    });
     const subscriptionId = `checkoutDiff:${JSON.stringify(queryKey)}`;
     const observer = new QueryObserver(queryClient, {
       queryKey,

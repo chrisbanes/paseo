@@ -784,6 +784,12 @@ export interface CheckoutImageDiffResult {
   diffImage: CheckoutImageDiffPayload;
 }
 
+export interface CheckoutImageDiffInput {
+  path: string;
+  oldPath?: string;
+  compare: CheckoutDiffCompare;
+}
+
 export interface MergeToBaseOptions {
   baseRef?: string;
   mode?: "merge" | "squash";
@@ -3109,11 +3115,7 @@ async function buildImageDiff(
 
 export async function getCheckoutImageDiff(
   cwd: string,
-  input: {
-    path: string;
-    oldPath?: string;
-    compare: CheckoutDiffCompare;
-  },
+  input: CheckoutImageDiffInput,
   context?: CheckoutContext,
 ): Promise<CheckoutImageDiffResult> {
   await requireGitRepo(cwd);

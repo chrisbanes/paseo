@@ -1,11 +1,14 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import type { CheckoutDiffGetImageResponse } from "@getpaseo/protocol/messages";
+import type {
+  CheckoutDiffGetImageRequest,
+  CheckoutDiffGetImageResponse,
+} from "@getpaseo/protocol/messages";
 import { useFetchQuery } from "@/data/query";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { checkoutImageDiffQueryKey } from "@/git/query-keys";
 
-interface UseImageDiffQueryOptions {
+export interface UseImageDiffQueryOptions {
   serverId: string;
   cwd: string;
   path: string;
@@ -13,11 +16,6 @@ interface UseImageDiffQueryOptions {
   mode: "uncommitted" | "base";
   baseRef?: string;
   enabled: boolean;
-}
-
-interface ImageDiffCompare {
-  mode: "uncommitted" | "base";
-  baseRef?: string;
 }
 
 export type ImageDiffPayload = CheckoutDiffGetImageResponse["payload"];
@@ -34,21 +32,21 @@ export function useImageDiffQuery({
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
-  const compare = useMemo<ImageDiffCompare>(
+  const compare = useMemo<CheckoutDiffGetImageRequest["compare"]>(
     () => ({
       mode,
       ...(mode === "base" && baseRef?.trim() ? { baseRef: baseRef.trim() } : {}),
     }),
     [baseRef, mode],
   );
-  const queryKey = checkoutImageDiffQueryKey(
+  const queryKey = checkoutImageDiffQueryKey({
     serverId,
     cwd,
     path,
     oldPath,
-    compare.mode,
-    compare.baseRef,
-  );
+    mode: compare.mode,
+    baseRef: compare.baseRef,
+  });
   const canLoad = enabled && Boolean(client) && isConnected && cwd.length > 0 && path.length > 0;
 
   return useFetchQuery<ImageDiffPayload>({

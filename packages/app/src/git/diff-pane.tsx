@@ -60,7 +60,6 @@ import { TreeIndentGuides, treeRowPaddingLeft } from "@/components/tree-primitiv
 import { SvgXml } from "react-native-svg";
 import { getFileIconSvg } from "@/components/material-file-icons";
 import { ImageDiffBody } from "@/git/image-diff-body";
-import { shouldRenderImageDiffBody } from "@/git/image-diff-helpers";
 import { useCheckoutStatusQuery } from "@/git/use-status-query";
 import { useCheckoutPrStatusQuery } from "@/git/use-pr-status-query";
 import { CommitsSection } from "@/git/commits-section/commits-section";
@@ -1048,6 +1047,19 @@ const DiffFileHeader = memo(function DiffFileHeader({
   );
 });
 
+interface WorkingTreeImageDiff {
+  serverId: string;
+  cwd: string;
+  mode: "uncommitted" | "base";
+  baseRef?: string;
+  imageDiffsSupported: boolean;
+  onOpenFile?: (filePath: string) => void;
+}
+
+function shouldRenderImageDiffBody(file: ParsedDiffFile): boolean {
+  return file.status === "binary" && file.binaryKind === "image";
+}
+
 export function DiffFileBody({
   file,
   imageDiff,
@@ -1061,14 +1073,7 @@ export function DiffFileBody({
   testID,
 }: {
   file: ParsedDiffFile;
-  imageDiff?: {
-    serverId: string;
-    cwd: string;
-    mode: "uncommitted" | "base";
-    baseRef?: string;
-    imageDiffsSupported: boolean;
-    onOpenFile?: (filePath: string) => void;
-  };
+  imageDiff?: WorkingTreeImageDiff;
   isExpanded?: boolean;
   layout: "unified" | "split";
   wrapLines: boolean;
@@ -1664,14 +1669,7 @@ interface SharedDiffViewProps {
         expandedPaths: string[];
         collapsedFolders: string[];
         reviewActions?: InlineReviewActions;
-        imageDiff: {
-          serverId: string;
-          cwd: string;
-          mode: "uncommitted" | "base";
-          baseRef?: string;
-          imageDiffsSupported: boolean;
-          onOpenFile?: (filePath: string) => void;
-        };
+        imageDiff: WorkingTreeImageDiff;
         onExpandedPathsChange: (paths: string[]) => void;
         onCollapsedFoldersChange: (paths: string[]) => void;
       }

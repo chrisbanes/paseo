@@ -32,6 +32,7 @@ import type {
   CheckoutCommit,
   ParsedDiffFile,
   CheckoutCommitResponse,
+  CheckoutDiffGetImageRequest,
   CheckoutDiffGetImageResponse,
   CheckoutMergeResponse,
   CheckoutMergeFromBaseResponse,
@@ -3552,7 +3553,7 @@ export class DaemonClient {
     input: {
       path: string;
       oldPath?: string;
-      compare: { mode: "uncommitted" | "base"; baseRef?: string };
+      compare: CheckoutDiffGetImageRequest["compare"];
     },
     requestId?: string,
   ): Promise<CheckoutDiffGetImagePayload> {
